@@ -4,7 +4,7 @@ import pytest
 from flask import Flask, g
 from flask_jwt_extended import JWTManager
 
-from app.exceptions.base import BusinessError
+from app.exceptions.base import BusinessError, ConflictError
 from app.extensions.extensions import bcrypt, db
 from app.models.poster import Poster
 from app.models.user import Refresh, User
@@ -49,7 +49,7 @@ def test_register_user_success(service_app):
 def test_register_user_duplicate_raises_value_error(service_app):
     with service_app.app_context():
         register_user(_register_data())
-        with pytest.raises(ValueError):
+        with pytest.raises(ConflictError):
             register_user(_register_data())
 
 
@@ -91,6 +91,13 @@ def test_user_login_wrong_password_raises_business_error(service_app):
         with pytest.raises(BusinessError) as exc:
             user_login("demo@example.com", "demo", "WrongPass123")
         assert exc.value.code == 40005
+
+
+def test_user_login_prefers_email_when_both_identifiers_are_provided(service_app):
+    with service_app.app_context():
+        register_user(_register_data())
+        data = user_login("demo@example.com", "wrong-user", "Strong123A")
+        assert data["email"] == "demo@example.com"
 
 
 def test_user_profile_not_found_raises_business_error(service_app):

@@ -14,8 +14,9 @@ from app.services.auth_service import (
     rotate_refresh_token,
     revoke_refresh_token,
 )
-from app.utils import success, error
+from app.utils import success
 from app.utils.validators import validate_request, validate_json_content_type
+from app.utils.validators import login_required
 from app.extensions.rate_limiting import limiter
 
 
@@ -36,13 +37,8 @@ def ping():
 def register():
     """用户注册"""
     data = g.validated_data
-    try:
-        result = register_user(data)
-        return success(result)
-    except ValueError as e:
-        return error(code="400", message=str(e))
-    except Exception:
-        raise
+    result = register_user(data)
+    return success(result)
 
 
 @auth_bp.route("/login", methods=["POST"])
@@ -55,20 +51,16 @@ def login():
     email = data.email
     username = data.username
     password = data.password
-
-    try:
-        result = user_login(email, username, password)
-        return success(result)
-    except ValueError as e:
-        return error(code="400", message=str(e))
-    except Exception:
-        raise
+    result = user_login(email, username, password)
+    return success(result)
 
 
 @auth_bp.route("/profile/<user_id>", methods=["GET"])
-@validate_json_content_type()
+@login_required()
 def profile(user_id):
     """用户信息"""
+    if str(g.user_id) != str(user_id):
+        raise BusinessError("无权访问其他用户信息", code=40301, http_code=403)
     result = user_profile(user_id)
     return success(result)
 

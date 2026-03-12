@@ -63,8 +63,11 @@ uv sync
 # 2) 配置环境变量
 cp .env.example .env
 
-# 3) 启动服务
-python run.py
+# 3) 初始化数据库
+uv run flask --app wsgi:app db upgrade
+
+# 4) 启动服务
+uv run python run.py
 ```
 
 默认地址：`http://127.0.0.1:5000`
@@ -108,7 +111,7 @@ docker compose up --build
 
 - `POST /auth/register`
 - `POST /auth/login`
-- `GET /auth/profile/<user_id>`
+- `GET /auth/profile/<user_id>`（需登录，且仅可访问本人）
 - `POST /auth/refresh`（支持 `GET` 兼容，推荐 `POST`）
 - `POST /auth/logout`
 

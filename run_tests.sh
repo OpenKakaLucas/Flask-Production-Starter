@@ -5,12 +5,20 @@ echo "======================================="
 echo "开始运行单元测试"
 echo "======================================="
 
-# 运行测试
-pytest -v \
-    --cov=app \
-    --cov-report=term-missing \
-    --cov-report=html \
-    tests/
+# 优先复用项目虚拟环境，其次回退到 uv
+if [ -x "./.venv/bin/pytest" ]; then
+    ./.venv/bin/pytest -v \
+        --cov=app \
+        --cov-report=term-missing \
+        --cov-report=html \
+        tests/
+else
+    uv run pytest -v \
+        --cov=app \
+        --cov-report=term-missing \
+        --cov-report=html \
+        tests/
+fi
 
 echo ""
 echo "======================================="

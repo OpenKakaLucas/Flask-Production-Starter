@@ -1,7 +1,7 @@
 import hashlib
 from datetime import timedelta, datetime
 
-from app.exceptions.base import BusinessError
+from app.exceptions.base import BusinessError, ConflictError, ValidationError
 from app.models.user import User, Refresh
 from app.extensions.extensions import db, bcrypt
 from flask_jwt_extended import (
@@ -9,7 +9,7 @@ from flask_jwt_extended import (
     create_refresh_token,
     get_jwt_identity,
 )
-from sqlalchemy import or_, and_
+from sqlalchemy import or_
 from app.utils.snowflake import snowflake
 
 
@@ -36,11 +36,11 @@ def register_user(data):
     email = data.email.strip() if data.email else None
     username = data.username.strip()
     if not email:
-        raise ValueError("邮箱不能为空")
+        raise ValidationError("邮箱不能为空")
     if not username:
-        raise ValueError("用户名不能为空")
+        raise ValidationError("用户名不能为空")
     if User.query.filter(or_(User.email == email, User.username == username)).first():
-        raise ValueError("用户名或邮箱已存在")
+        raise ConflictError("用户名或邮箱已存在")
     password_hash = bcrypt.generate_password_hash(data.password).decode("utf-8")
     user_id = snowflake.generate()
     user = User(username=username, password=password_hash, email=email, user_id=user_id)
@@ -52,14 +52,11 @@ def register_user(data):
 def user_login(email, username, password):
     if not email and not username:
         raise BusinessError("邮箱或用户名至少填写一个", code=40002, http_code=400)
-
-    filters = []
-    if email:
-        filters.append(User.email == email)
-    if username:
-        filters.append(User.username == username)
-
-    user = User.query.filter(and_(*filters)).first()
+    user = (
+        User.query.filter(User.email == email).first()
+        if email
+        else User.query.filter(User.username == username).first()
+    )
     if not user:
         raise BusinessError("用户不存在", code=40004, http_code=404)
 

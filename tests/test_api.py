@@ -2,9 +2,15 @@
 API 基础端点测试
 """
 
+from types import SimpleNamespace
+
 from flask import Flask
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_jwt_extended import create_access_token
+
+from app.models.user import User
+from app.services.auth_service import register_user
 
 
 class TestHealthCheck:
@@ -37,6 +43,64 @@ class TestAuthEndpoints:
         response = client.get("/auth/")
         assert response.status_code == 200
         assert response.json["code"] == "200"
+
+    def test_register_duplicate_uses_unified_error_payload(self, client, app, db_init):
+        with app.app_context():
+            register_user(
+                SimpleNamespace(
+                    username="dup_user",
+                    email="dup@example.com",
+                    password="Strong123A",
+                )
+            )
+
+        response = client.post(
+            "/auth/register",
+            json={
+                "username": "dup_user",
+                "email": "dup2@example.com",
+                "password": "Strong123A",
+            },
+        )
+        assert response.status_code == 409
+        assert response.json["status"] == "error"
+        assert "request_id" in response.json
+
+    def test_profile_requires_auth_and_is_self_only(self, client, app, db_init):
+        with app.app_context():
+            register_user(
+                SimpleNamespace(
+                    username="profile_user",
+                    email="profile@example.com",
+                    password="Strong123A",
+                )
+            )
+            register_user(
+                SimpleNamespace(
+                    username="other_user",
+                    email="other@example.com",
+                    password="Strong123A",
+                )
+            )
+            current_user = User.query.filter_by(username="profile_user").first()
+            other_user = User.query.filter_by(username="other_user").first()
+            token = create_access_token(identity=str(current_user.user_id))
+
+        unauth_response = client.get(f"/auth/profile/{current_user.user_id}")
+        assert unauth_response.status_code == 403
+
+        forbidden_response = client.get(
+            f"/auth/profile/{other_user.user_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert forbidden_response.status_code == 403
+
+        ok_response = client.get(
+            f"/auth/profile/{current_user.user_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert ok_response.status_code == 200
+        assert ok_response.json["data"]["user_id"] == current_user.user_id
 
 
 class TestMetricsEndpoint:
